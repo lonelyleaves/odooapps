@@ -3,8 +3,9 @@
 {
     'name': 'Odoo 14 HR Payroll',
     'category': 'Generic Modules/Human Resources',
-    'version': '14.0.6.0.0',
+    'version': '14.0.8.0.0',
     'sequence': 1,
+    'license': 'LGPL-3',
     'author': 'Odoo Mates, Odoo SA',
     'summary': 'Payroll For Odoo 14 Community Edition',
     'live_test_url': 'https://www.youtube.com/watch?v=0kaHMTtn7oY',
@@ -31,6 +32,7 @@
         'views/report_contribution_register_templates.xml',
         'views/report_payslip_templates.xml',
         'views/report_payslip_details_templates.xml',
+        'data/mail_template.xml',
     ],
     'images': ['static/description/banner.png'],
     'application': True,

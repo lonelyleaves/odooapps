@@ -72,7 +72,6 @@
             <field name="search_view_id" ref="customer_followup_search_view"/>
         </record>
 
-        <!--Inherited view -->
         <record id="view_partner_inherit_followup_form" model="ir.ui.view">
             <field name="name">res.partner.followup.form.inherit</field>
             <field name="inherit_id" ref="base.view_partner_form"/>
@@ -171,10 +170,9 @@
             <field name="act_window_id" ref="action_customer_followup"/>
         </record>
 
-        <!-- Menus about followup of customers -->
         <menuitem id="om_account_followup_s"
                   action="action_customer_followup"
-                  parent="menu_payment_followup"
+                  parent="menu_finance_followup"
                   name="Do Manual Follow-Ups"
                   sequence="3"/>
 
@@ -189,7 +187,7 @@
         </record>
 
         <menuitem id="menu_sale_followup"
-                  parent="menu_payment_followup"
+                  parent="menu_finance_followup"
                   sequence="10"
                   action="action_customer_my_followup"
                   groups="account.group_account_invoice"/>

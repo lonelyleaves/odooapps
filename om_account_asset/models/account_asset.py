@@ -34,7 +34,7 @@ class AccountAssetCategory(models.Model):
                                                            " to record a part of the asset as expense.")
     journal_id = fields.Many2one('account.journal', string='Journal', required=True)
     company_id = fields.Many2one('res.company', string='Company', required=True,
-                                 default=lambda self: self.env['res.company']._company_default_get('account.asset.category'))
+                                 default=lambda self: self.env.company)
     method = fields.Selection([('linear', 'Linear'), ('degressive', 'Degressive')],
                               string='Computation Method', required=True, default='linear',
         help="Choose the method to use to compute the amount of depreciation lines.\n"
@@ -102,14 +102,14 @@ class AccountAssetAsset(models.Model):
                        readonly=True, states={'draft': [('readonly', False)]})
     code = fields.Char(string='Reference', size=32, readonly=True,
                        states={'draft': [('readonly', False)]})
-    value = fields.Float(string='Gross Value', required=True, readonly=True,
-                         digits=0, states={'draft': [('readonly', False)]})
+    value = fields.Monetary(string='Gross Value', required=True, readonly=True,
+                         states={'draft': [('readonly', False)]})
     currency_id = fields.Many2one('res.currency', string='Currency', required=True,
                                   readonly=True, states={'draft': [('readonly', False)]},
         default=lambda self: self.env.user.company_id.currency_id.id)
     company_id = fields.Many2one('res.company', string='Company', required=True,
                                  readonly=True, states={'draft': [('readonly', False)]},
-        default=lambda self: self.env['res.company']._company_default_get('account.asset.asset'))
+                                 default=lambda self: self.env.company)
     note = fields.Text()
     category_id = fields.Many2one('account.asset.category', string='Category',
                                   required=True, change_default=True,
@@ -141,7 +141,7 @@ class AccountAssetAsset(models.Model):
     method_end = fields.Date(string='Ending Date', readonly=True, states={'draft': [('readonly', False)]})
     method_progress_factor = fields.Float(string='Degressive Factor',
                                           readonly=True, default=0.3, states={'draft': [('readonly', False)]})
-    value_residual = fields.Float(compute='_amount_residual', digits=0, string='Residual Value')
+    value_residual = fields.Monetary(compute='_amount_residual', string='Residual Value')
     method_time = fields.Selection([('number', 'Number of Entries'), ('end', 'Ending Date')],
                                    string='Time Method', required=True, readonly=True, default='number',
                                    states={'draft': [('readonly', False)]},
@@ -155,7 +155,7 @@ class AccountAssetAsset(models.Model):
     depreciation_line_ids = fields.One2many('account.asset.depreciation.line', 'asset_id',
                                             string='Depreciation Lines', readonly=True,
                                             states={'draft': [('readonly', False)], 'open': [('readonly', False)]})
-    salvage_value = fields.Float(string='Salvage Value', digits=0, readonly=True,
+    salvage_value = fields.Monetary(string='Salvage Value', readonly=True,
                                  states={'draft': [('readonly', False)]},
         help="It is the amount you plan to have that you cannot depreciate.")
     invoice_id = fields.Many2one('account.move', string='Invoice', states={'draft': [('readonly', False)]}, copy=False)
@@ -280,8 +280,8 @@ class AccountAssetAsset(models.Model):
                     depreciation_date = depreciation_date + relativedelta(day=31)
                     # ... or fiscalyear depending the number of period
                     if self.method_period == 12:
-                        depreciation_date = depreciation_date + relativedelta(month=self.company_id.fiscalyear_last_month)
-                        depreciation_date = depreciation_date + relativedelta(day=self.company_id.fiscalyear_last_day)
+                        depreciation_date = depreciation_date + relativedelta(month=int(self.company_id.fiscalyear_last_month))
+                        depreciation_date = depreciation_date + relativedelta(day=int(self.company_id.fiscalyear_last_day))
                         if depreciation_date < self.date:
                             depreciation_date = depreciation_date + relativedelta(years=1)
                 elif self.first_depreciation_manual_date and self.first_depreciation_manual_date != self.date:
@@ -525,13 +525,16 @@ class AccountAssetDepreciationLine(models.Model):
     sequence = fields.Integer(required=True)
     asset_id = fields.Many2one('account.asset.asset', string='Asset', required=True, ondelete='cascade')
     parent_state = fields.Selection(related='asset_id.state', string='State of Asset')
-    amount = fields.Float(string='Current Depreciation', digits=0, required=True)
-    remaining_value = fields.Float(string='Next Period Depreciation', digits=0, required=True)
-    depreciated_value = fields.Float(string='Cumulative Depreciation', required=True)
+    amount = fields.Monetary(string='Current Depreciation', required=True)
+    remaining_value = fields.Monetary(string='Next Period Depreciation', required=True)
+    depreciated_value = fields.Monetary(string='Cumulative Depreciation', required=True)
     depreciation_date = fields.Date('Depreciation Date', index=True)
     move_id = fields.Many2one('account.move', string='Depreciation Entry')
     move_check = fields.Boolean(compute='_get_move_check', string='Linked', store=True)
     move_posted_check = fields.Boolean(compute='_get_move_posted_check', string='Posted', store=True)
+    currency_id = fields.Many2one('res.currency', string='Currency',
+                                  related='asset_id.currency_id',
+                                  readonly=True)
 
     @api.depends('move_id')
     def _get_move_check(self):
@@ -554,7 +557,7 @@ class AccountAssetDepreciationLine(models.Model):
             created_moves |= move
 
         if post_move and created_moves:
-            created_moves.filtered(lambda m: any(m.asset_depreciation_ids.mapped('asset_id.category_id.open_asset'))).post()
+            created_moves.filtered(lambda m: any(m.asset_depreciation_ids.mapped('asset_id.category_id.open_asset'))).action_post()
         return [x.id for x in created_moves]
 
     def _prepare_move(self, line):
@@ -648,10 +651,8 @@ class AccountAssetDepreciationLine(models.Model):
         move = self.env['account.move'].create(self._prepare_move_grouped())
         self.write({'move_id': move.id, 'move_check': True})
         created_moves |= move
-
         if post_move and created_moves:
-            self.post_lines_and_close_asset()
-            created_moves.post()
+            created_moves.action_post()
         return [x.id for x in created_moves]
 
     def post_lines_and_close_asset(self):
